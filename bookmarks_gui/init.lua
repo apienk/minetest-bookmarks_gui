@@ -44,7 +44,7 @@ bookmarks_gui.set = function(name, pos)
 			table.remove(bookmarkspos,i)
 		end
 	end
-	table.insert(bookmarkspos,{name=name,x=pos.x,y=pos.y,z=pos.z})
+	table.insert(bookmarkspos,{name=name,x=pos.x,y=pos.y+1,z=pos.z})
 	-- save the bookmarks data from the table to the file
 	local output = io.open(bookmarks_gui.filename..".bookmarks", "w")
 	for i, v in ipairs(bookmarkspos) do
@@ -98,30 +98,15 @@ bookmarks_gui.go = function(name, player)
 	end
 end
 
-
-local use_sfinv = false
-if not core.global_exists("inventory_plus") and core.global_exists("sfinv_buttons") then
-	use_sfinv = true
-else
-	local use_sfinv = (core.global_exists("sfinv_buttons") and core.settings:get("inventory") == "sfinv") or false
-end
-
-local ui_icon = nil
-if core.get_modpath("default") then
-	ui_icon = 'default_book.png'
-end
-
-
 -- formspec
-bookmarks_gui.formspec = function(player)
-	local formspec = "size[14,10]"
-		.."button[0,9.5;2,0.5;main;Back]"
+bookmarks_gui.formspec = function()
+	local formspec = ""
 	local pages = bookmarks_gui.get_names()
 	local x,y = 0,0
 	local p
 	for i = #pages,1,-1 do
 		p = pages[i]
-		if x == 14 then
+		if x == 8 then
 			y = y+1
 			x = 0
 		end
@@ -130,21 +115,18 @@ bookmarks_gui.formspec = function(player)
 	end
 	if #pages == 0 then
 		formspec = formspec
-			.."label[4,3; --== Bookmarks GUI ==--]"
-			.."label[4,4.5; Create as many bookmarks as you like!]"
-			.."label[4,5.0; Simply enter a name for your bookmark]"
-			.."label[4,5.5; then click Go.]"
+			.."label[2,2; --== Bookmarks GUI ==--]"
+			.."label[2,3.5; Create as many bookmarks as you like!]"
+			.."label[2,4.0; Simply enter a name for your bookmark]"
+			.."label[2,4.5; then click Set to save.]"
 	end
 	formspec = formspec
-		.."field[2.5,9.6;2,1;bookmarks_gui_go_name;;]"
-		.."button_exit[4,9.5;1,0.5;bookmarks_gui_go;Go]"
-	if minetest.check_player_privs(player:get_player_name(), {server=true}) then 
-		formspec = formspec
-			.."field[8.5,9.6;2,1;bookmarks_gui_del_name;;]"
-			.."button_exit[10,9.5;1,0.5;bookmarks_gui_del;Del]"
-			.."field[11.5,9.6;2,1;bookmarks_gui_set_name;;]"
-			.."button_exit[13,9.5;1,0.5;bookmarks_gui_set;Set]"
-	end
+		.."field[0.5,8.1;1.5,1;bookmarks_gui_go_name;;]"
+		.."button_exit[1.5,8;1,0.5;bookmarks_gui_go;Go]"
+		.."field[3.0,8.1;1.5,1;bookmarks_gui_del_name;;]"
+		.."button_exit[4.0,8;1,0.5;bookmarks_gui_del;Del]"
+		.."field[5.5,8.1;1.5,1;bookmarks_gui_set_name;;]"
+		.."button_exit[6.5,8;1,0.5;bookmarks_gui_set;Set]"
 	return formspec
 end
 
@@ -157,35 +139,12 @@ bookmarks_gui.get_names = function()
 	return pages
 end
 
-if use_sfinv then
-	sfinv_buttons.register_button("bookmarks_gui", {
-		title = "Bookmarks",
-		action = function(player)
-			player:set_inventory_formspec(bookmarks_gui.formspec(player, "bookmarks_gui"))
-		end,
-		image = ui_icon,
-	})
-end
-
--- register_on_joinplayer
-minetest.register_on_joinplayer(function(player)
-	if not use_sfinv then
-		-- add inventory_plus page
-		inventory_plus.register_button(player,"bookmarks_gui","Bookmarks")
-	end
-end)
-
--- register_on_player_receive_fields
-minetest.register_on_player_receive_fields(function(player, formname, fields)
+bookmarks_gui.form_update = function(player, fields)
 	if fields.bookmarks_gui_set and fields.bookmarks_gui_set_name then
-		if minetest.check_player_privs(player:get_player_name(), {server=true}) then 
-			bookmarks_gui.set(fields.bookmarks_gui_set_name, player:getpos())
-		end
+		bookmarks_gui.set(fields.bookmarks_gui_set_name, player:getpos())
 	end
 	if fields.bookmarks_gui_del and fields.bookmarks_gui_del_name then
-		if minetest.check_player_privs(player:get_player_name(), {server=true}) then 
-			bookmarks_gui.del(fields.bookmarks_gui_del_name, player:getpos())
-		end
+		bookmarks_gui.del(fields.bookmarks_gui_del_name, player:getpos())
 	end
 	if fields.bookmarks_gui_go and fields.bookmarks_gui_go_name then
 		bookmarks_gui.go(fields.bookmarks_gui_go_name, player)
@@ -193,14 +152,20 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
 	if fields.bookmarks_gui_jump then
 		bookmarks_gui.go(fields.bookmarks_gui_jump, player)
 	end
-	if fields.bookmarks_gui or fields.bookmarks_gui_set or fields.bookmarks_gui_del or fields.bookmarks_gui_go or fields.bookmarks_gui_jump then
-		if use_sfinv then
-			sfinv.set_page(player, "sfinv_buttons:buttons")
-		else
-			inventory_plus.set_inventory_formspec(player, bookmarks_gui.formspec(player))
-		end
-	end
-end)
+end
 
--- log that we started
-minetest.log("action", "[MOD]"..minetest.get_current_modname().." -- loaded from "..minetest.get_modpath(minetest.get_current_modname()))
+sfinv.register_page("bookmarks_gui:places", {
+	title = "Places",
+	get = function(self, player, context)
+		return sfinv.make_formspec(player, context, bookmarks_gui.formspec(), false)
+	end,
+	is_in_nav = function(self, player, context)
+		return minetest.check_player_privs(player, { instructor = true})
+	end,
+	on_player_receive_fields = function(self, player, context, fields)
+		if minetest.check_player_privs(player, { instructor = true}) then
+			bookmarks_gui.form_update(player, fields)
+			sfinv.set_page(player, "bookmarks_gui:places")
+		end
+	end,
+})
